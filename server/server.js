@@ -1,7 +1,20 @@
 import express from "express";
 import cors from "cors";
-import { getAllBooks, getBookById } from "./booksStore.js";
-import { parsePositiveInt, validateQueryOptions } from "./validate.js";
+import {
+  getAllBooks,
+  getBookById,
+  hasDuplicateBook,
+  createBook,
+  replaceBook,
+  updateBookPartial,
+  deleteBook,
+} from "./booksStore.js";
+import {
+  parsePositiveInt,
+  validateCompleteBook,
+  validatePatchBook,
+  validateQueryOptions,
+} from "./validate.js";
 
 const app = express();
 
@@ -116,6 +129,119 @@ app.get("/api/books/:id", async (req, res, next) => {
     }
 
     return res.status(200).json(book);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+app.post("/api/books", async (req, res, next) => {
+  try {
+    const { data, error } = validateCompleteBook(req.body);
+    if (error) {
+      return res.status(400).json({ error });
+    }
+
+    const duplicate = await hasDuplicateBook(data.title, data.author);
+    if (duplicate) {
+      return res
+        .status(409)
+        .json({
+          error: "A book with the same title and author already exists",
+        });
+    }
+
+    const created = await createBook(data);
+    return res.status(201).location(`/api/books/${created.id}`).json(created);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+app.put("/api/books/:id", async (req, res, next) => {
+  try {
+    const id = parsePositiveInt(req.params.id);
+    if (id === null) {
+      return res
+        .status(400)
+        .json({ error: "Book id must be a positive integer" });
+    }
+
+    const existing = await getBookById(id);
+    if (!existing) {
+      return res.status(404).json({ error: "Book not found" });
+    }
+
+    const { data, error } = validateCompleteBook(req.body);
+    if (error) {
+      return res.status(400).json({ error });
+    }
+
+    const duplicate = await hasDuplicateBook(data.title, data.author, id);
+    if (duplicate) {
+      return res
+        .status(409)
+        .json({
+          error: "Another book with the same title and author already exists",
+        });
+    }
+
+    const updated = await replaceBook(id, data);
+    return res.status(200).json(updated);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+app.patch("/api/books/:id", async (req, res, next) => {
+  try {
+    const id = parsePositiveInt(req.params.id);
+    if (id === null) {
+      return res
+        .status(400)
+        .json({ error: "Book id must be a positive integer" });
+    }
+
+    const existing = await getBookById(id);
+    if (!existing) {
+      return res.status(404).json({ error: "Book not found" });
+    }
+
+    const { data, error } = validatePatchBook(existing, req.body);
+    if (error) {
+      return res.status(400).json({ error });
+    }
+
+    const duplicate = await hasDuplicateBook(data.title, data.author, id);
+    if (duplicate) {
+      return res
+        .status(409)
+        .json({
+          error: "Another book with the same title and author already exists",
+        });
+    }
+
+    const updated = await updateBookPartial(id, data);
+    return res.status(200).json(updated);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+app.delete("/api/books/:id", async (req, res, next) => {
+  try {
+    const id = parsePositiveInt(req.params.id);
+    if (id === null) {
+      return res
+        .status(400)
+        .json({ error: "Book id must be a positive integer" });
+    }
+
+    const deleted = await deleteBook(id);
+    if (!deleted) {
+      return res.status(404).json({ error: "Book not found" });
+    }
+
+    return res.status(204).end();
   } catch (err) {
     return next(err);
   }
