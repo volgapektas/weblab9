@@ -114,6 +114,14 @@ app.get("/api/stats", async (req, res, next) => {
   }
 });
 
+app.get("/api/crash", async (req, res, next) => {
+  try {
+    throw new Error("Simulated unexpected server failure");
+  } catch (err) {
+    return next(err);
+  }
+});
+
 app.get("/api/books/:id", async (req, res, next) => {
   try {
     const id = parsePositiveInt(req.params.id);
@@ -245,6 +253,19 @@ app.delete("/api/books/:id", async (req, res, next) => {
   } catch (err) {
     return next(err);
   }
+});
+
+app.use("/api", (req, res) => {
+  return res.status(404).json({ error: "Not found" });
+});
+
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
+    return res.status(400).json({ error: "Invalid JSON body" });
+  }
+
+  console.error(err);
+  return res.status(500).json({ error: "Something went wrong" });
 });
 
 app.listen(PORT, () => {
